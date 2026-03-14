@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conecta Cortês - Oficial</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg-color: #08080A; --primary-green: #00A859; --text-white: #FFFFFF; }
+        body { background-color: var(--bg-color); color: var(--text-white); font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        
+        .app-container { width: 350px; height: 620px; background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 40px; padding: 25px; display: flex; flex-direction: column; box-sizing: border-box; position: relative; }
+        
+        .screen { display: none; flex-direction: column; height: 100%; }
+        .active { display: flex !important; }
+
+        input { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 14px; border-radius: 12px; color: white; margin-bottom: 10px; outline: none; width: 100%; box-sizing: border-box; }
+        .btn { width: 100%; padding: 16px; border: none; border-radius: 15px; background: linear-gradient(135deg, var(--primary-green), #0072BB); color: white; font-weight: 700; cursor: pointer; margin-top: 10px; }
+        
+        .card-opt { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 15px; border-radius: 15px; margin-bottom: 10px; cursor: pointer; text-align: center; font-weight: 600; transition: 0.3s; }
+        .selected { border-color: var(--primary-green); background: rgba(0, 168, 89, 0.2); box-shadow: 0 0 15px rgba(0, 168, 89, 0.1); }
+        
+        /* Estilo do Ticket */
+        #tela-ticket { position: absolute; top:0; left:0; width:100%; height:100%; background: var(--bg-color); z-index: 100; display:none; flex-direction:column; align-items:center; justify-content:center; padding: 20px; box-sizing: border-box; }
+        .ticket { background: #fff; color: #000; padding: 30px; border-radius: 25px; width: 100%; text-align: center; }
+        .tk-pos { font-size: 50px; font-weight: 800; color: var(--primary-green); margin: 5px 0; }
+        .tk-nome { font-size: 16px; font-weight: 700; text-transform: uppercase; border-top: 1px dashed #ddd; border-bottom: 1px dashed #ddd; padding: 10px 0; margin: 15px 0; }
+
+        /* Painel Lista */
+        #painel-lista { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #08080A; z-index: 200; display: none; padding: 30px; box-sizing: border-box; border-radius: 40px; }
+        .item-lista { display:flex; justify-content:space-between; padding:12px; border-bottom:1px solid #222; font-size:13px; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <div id="screen-login" class="screen">
+            <h1 style="text-align:center;">Conecta <span style="color:var(--primary-green);">Cortês</span></h1>
+            <input type="number" id="l-cpf" placeholder="CPF (só números)">
+            <input type="password" id="l-senha" placeholder="Sua Senha">
+            <button class="btn" onclick="fazerLogin()">Entrar</button>
+            <button onclick="irPara('screen-register')" style="background:none; border:none; color:var(--primary-green); margin-top:15px; cursor:pointer;">Criar nova conta</button>
+        </div>
+
+        <div id="screen-register" class="screen">
+            <h1>Cadastro</h1>
+            <input type="text" id="r-nome" placeholder="Nome Completo">
+            <input type="text" id="r-apelido" placeholder="Apelido">
+            <input type="number" id="r-cpf" placeholder="CPF">
+            <input type="password" id="r-senha" placeholder="Senha (mín. 6 dígitos)">
+            <button class="btn" onclick="criarConta()">Salvar</button>
+            <button onclick="irPara('screen-login')" style="background:none; border:none; color:var(--primary-green); margin-top:10px; cursor:pointer;">Já tenho conta</button>
+        </div>
+
+        <div id="screen-main" class="screen">
+            <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                <h3 id="msg-user" style="margin:0;">Olá!</h3>
+                <button onclick="abrirLista()" style="background: rgba(255,255,255,0.1); border:none; border-radius:10px; padding:8px 12px; color:white; cursor:pointer; font-size:11px; font-weight:bold;">📋 VER LISTA</button>
+            </header>
+
+            <div id="btn-rever-ticket" onclick="mostrarTicketSalvo()" style="display:none; background: rgba(0, 168, 89, 0.15); border: 1px solid var(--primary-green); padding: 15px; border-radius: 15px; text-align: center; margin-bottom: 20px; cursor: pointer;">
+                <span style="display:block; font-weight: bold; color: var(--primary-green);">🎫 REVER MEU TICKET</span>
+            </div>
+
+            <p id="txt-instrucao" style="font-size: 14px; opacity: 0.8;">Para onde você vai hoje?</p>
+            
+            <div id="area-selecao">
+                <div class="card-opt" id="opt-nassau" onclick="selecionarDestino('UNINASSAU')">🏫 UNINASSAU</div>
+                <div class="card-opt" id="opt-outras" onclick="selecionarDestino('OUTRAS')">🎓 OUTRAS</div>
+                <button class="btn" id="btn-confirmar" onclick="salvarReserva()" style="display: none; margin-top: 15px;">CONFIRMAR RESERVA</button>
+            </div>
+            
+            <button onclick="firebase.auth().signOut()" style="margin-top: auto; color: #555; border: none; background: none; cursor: pointer;">Sair da Conta</button>
+        </div>
+
+        <div id="tela-ticket">
+            <div class="ticket">
+                <div style="font-size:11px; color:#999; letter-spacing:1px;">COMPROVANTE DE VAGA</div>
+                <div class="tk-pos" id="tk-posicao">#000</div>
+                <div class="tk-nome" id="tk-nome">NOME DO ALUNO</div>
+                <div id="tk-destino" style="font-weight: bold; color: #333; font-size:14px;"></div>
+                <div id="tk-data" style="font-size: 11px; margin-top: 10px; color: #aaa;"></div>
+            </div>
+            <button class="btn" onclick="document.getElementById('tela-ticket').style.display='none'" style="margin-top: 20px;">VOLTAR</button>
+        </div>
+
+        <div id="painel-lista">
+            <h3>Fila de Embarque</h3>
+            <p style="font-size: 11px; color: var(--primary-green); margin-bottom: 15px;">Abaixo estão os alunos confirmados por ordem de chegada.</p>
+            <div id="lista-cont" style="overflow-y:auto; height:380px; border-top: 1px solid #222;"></div>
+            <button class="btn" onclick="document.getElementById('painel-lista').style.display='none'" style="background:#222; margin-top:20px;">FECHAR</button>
+        </div>
+
+    </div>
+
+    <script>
+        // CONFIGURAÇÃO FIREBASE (SUAS CHAVES)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDG1x9M2T6wG_HG2MJ9w4dj2c8XOEsbIP4",
+            authDomain: "conecta-cortes.firebaseapp.com",
+            databaseURL: "https://conecta-cortes-default-rtdb.firebaseio.com",
+            projectId: "conecta-cortes",
+            storageBucket: "conecta-cortes.firebasestorage.app",
+            messagingSenderId: "923397923591",
+            appId: "1:923397923591:web:9eb4d4f7f2690c193e9ba2"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const auth = firebase.auth();
+        let userLogado = null;
+        let destinoSelecionado = "";
+        let ticketSessao = null;
+
+        function irPara(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        // Monitor de Login
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                db.ref('usuarios/' + user.uid).once('value').then(snap => {
+                    userLogado = snap.val();
+                    document.getElementById('msg-user').innerText = "Olá, " + userLogado.apelido + "!";
+                    irPara('screen-main');
+                    verificarReservaExistente();
+                });
+            } else { irPara('screen-login'); }
+        });
+
+        // Seleção de Destino
+        function selecionarDestino(valor) {
+            destinoSelecionado = valor;
+            document.querySelectorAll('.card-opt').forEach(c => c.classList.remove('selected'));
+            const id = valor === 'UNINASSAU' ? 'opt-nassau' : 'opt-outras';
+            document.getElementById(id).classList.add('selected');
+            document.getElementById('btn-confirmar').style.display = 'block';
+        }
+
+        // Verifica se o aluno já reservou hoje
+        async function verificarReservaExistente() {
+            const snap = await db.ref('passageiros').once('value');
+            let count = 1;
+            let achou = false;
+            snap.forEach(c => {
+                if(c.val().cpf_completo === userLogado.cpf) {
+                    ticketSessao = { ...c.val(), posicao: count };
+                    achou = true;
+                }
+                count++;
+            });
+
+            if(achou) {
+                document.getElementById('btn-rever-ticket').style.display = 'block';
+                document.getElementById('txt-instrucao').innerText = "Você já reservou sua vaga!";
+                document.getElementById('area-selecao').style.display = 'none';
+            }
+        }
+
+        // Salva no Banco de Dados
+        async function salvarReserva() {
+            if(!destinoSelecionado || !userLogado) return;
+            
+            const snap = await db.ref('passageiros').once('value');
+            let count = 1;
+            snap.forEach(() => count++);
+
+            const novaReserva = {
+                nome_completo: userLogado.nome,
+                cpf_completo: userLogado.cpf,
+                apelido: userLogado.apelido,
+                destino: destinoSelecionado,
+                timestamp: Date.now()
+            };
+
+            await db.ref('passageiros').push(novaReserva);
+            ticketSessao = { ...novaReserva, posicao: count };
+            mostrarTicketSalvo();
+            verificarReservaExistente();
+        }
+
+        // Mostra o Comprovante (Ticket)
+        function mostrarTicketSalvo() {
+            if(!ticketSessao) return;
+            document.getElementById('tk-posicao').innerText = "#" + String(ticketSessao.posicao).padStart(3, '0');
+            document.getElementById('tk-nome').innerText = ticketSessao.nome_completo;
+            document.getElementById('tk-destino').innerText = "DESTINO: " + ticketSessao.destino;
+            document.getElementById('tk-data').innerText = new Date(ticketSessao.timestamp).toLocaleString('pt-BR');
+            document.getElementById('tela-ticket').style.display = 'flex';
+        }
+
+        // Abre a Fila de Alunos
+        function abrirLista() {
+            document.getElementById('painel-lista').style.display = 'block';
+            const cont = document.getElementById('lista-cont');
+            cont.innerHTML = "<p style='text-align:center; margin-top:20px;'>Carregando...</p>";
+            
+            db.ref('passageiros').on('value', snap => {
+                cont.innerHTML = "";
+                let i = 1;
+                snap.forEach(it => {
+                    const p = it.val();
+                    cont.innerHTML += `
+                        <div class="item-lista">
+                            <span><b>${i}º</b> ${p.apelido}</span>
+                            <span style="color:var(--primary-green); font-weight:bold;">${p.destino}</span>
+                        </div>`;
+                    i++;
+                });
+                if(i === 1) cont.innerHTML = "<p style='text-align:center; padding:20px; opacity:0.5;'>Ninguém na lista.</p>";
+            });
+        }
+
+        // Criar Conta
+        async function criarConta() {
+            const n = document.getElementById('r-nome').value;
+            const a = document.getElementById('r-apelido').value;
+            const c = document.getElementById('r-cpf').value;
+            const s = document.getElementById('r-senha').value;
+            if(c.length != 11 || s.length < 6) return alert("CPF deve ter 11 dígitos e Senha mín. 6.");
+            try {
+                const res = await auth.createUserWithEmailAndPassword(c + "@cortes.com", s);
+                await db.ref('usuarios/' + res.user.uid).set({ nome: n, apelido: a, cpf: c });
+            } catch(e) { alert("Erro: " + e.message); }
+        }
+
+        // Fazer Login
+        async function fazerLogin() {
+            const c = document.getElementById('l-cpf').value;
+            const s = document.getElementById('l-senha').value;
+            try { await auth.signInWithEmailAndPassword(c + "@cortes.com", s); }
+            catch(e) { alert("CPF ou Senha incorretos!"); }
+        }
+    </script>
+</body>
+</html>
