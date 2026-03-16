@@ -340,9 +340,12 @@
                     </div>
                 </div>
 
-                <div style="background:var(--glass); padding:15px; border-radius:25px; border:1px solid var(--pref-verde-glow); margin-bottom:15px;">
-                    <p id="timer-label" style="font-size:10px; opacity:0.6; letter-spacing:1px; margin-bottom:5px;">SEU TICKET SERÁ GERADO EM:</p>
-                    <div id="countdown" style="font-size: 28px;">00:00:00</div>
+                <div id="container-central-ticket" style="background:var(--glass); padding:15px; border-radius:25px; border:1px solid var(--pref-verde-glow); margin-bottom:15px;">
+                    <div id="bloco-timer">
+                        <p id="timer-label" style="font-size:10px; opacity:0.6; letter-spacing:1px; margin-bottom:5px;">SEU TICKET SERÁ GERADO EM:</p>
+                        <div id="countdown" style="font-size: 28px;">00:00:00</div>
+                    </div>
+                    <button id="btn-rever" class="btn-confirmar" style="display:none; background:var(--pref-verde)" onclick="calcularEVerTicket()">Ver Ticket de Embarque</button>
                 </div>
 
                 <div class="abas-container">
@@ -351,15 +354,14 @@
                 </div>
 
                 <div id="aba-mapa" class="area-conteudo-aba active">
-                    <div id="map" style="height: 200px; width: 100%; border-radius: 15px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2);"></div>
+                    <div id="map" style="height: 180px; width: 100%; border-radius: 15px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.3); z-index: 1;"></div>
                     <p id="msg-gps" style="font-size: 10px; opacity: 0.5; margin-top: 8px;">Aguardando sinal GPS dos ônibus...</p>
                 </div>
 
                 <div id="aba-lista" class="area-conteudo-aba">
-                    <div id="lista-passageiros-aba" class="scroll-lista" style="height: 180px;"></div>
+                    <div id="lista-passageiros-aba" class="scroll-lista" style="height: 100%;"></div>
                 </div>
                 
-                <button id="btn-rever" class="btn-confirmar" style="display:none; margin-top:15px;" onclick="calcularEVerTicket()">Ver Ticket de Embarque</button>
                 <button id="btn-lista-publica" onclick="abrirListaPublica()" style="display:none; background:none; border: 1px solid rgba(128,128,128,0.2); color: var(--text-color); padding: 18px; border-radius: 20px; width:100%; margin-top: 12px; cursor: pointer; font-weight: 700;">Lista Completa (PDF)</button>
             </div>
 
@@ -415,7 +417,7 @@
     </div>
 
     <script>
-        // CONFIGURAÇÕES FIREBASE (Originais restauradas)
+        // CONFIGURAÇÕES FIREBASE
         const firebaseConfig = {
             apiKey: "AIzaSyDG1x9M2T6wG_HG2MJ9w4dj2c8XOEsbIP4",
             authDomain: "conecta-cortes.firebaseapp.com",
@@ -433,73 +435,64 @@
         let destinoSelecionado = "";
         let configApp = { instantaneo: false, h24: false, msg: "", reservaInicia: "07:00", reservaTermina: "12:00", vagasOnibus: 45 };
         let jaProcessouAuto = false;
-
-        // VARIÁVEIS DO MAPA
         let map;
-        let busMarkers = {}; // Dicionário para gerenciar múltiplos ônibus
+        let busMarkers = {}; 
 
         function inicializarMapa() {
             if (map) return;
+            // Centro em Cortês
             map = L.map('map').setView([-8.4842, -35.5539], 15);
+            
+            // Tiles mais estáveis para visualização
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OpenStreetMap'
+            attribution: '&copy; OpenStreetMap &copy; CARTO'
             }).addTo(map);
+
+            db.ref('localizacao_onibus').on('value', snap => {
+                if(snap.exists() && map) {
+                    const dadosFrotas = snap.val();
+                    for (let idBus in dadosFrotas) {
+                        const info = dadosFrotas[idBus];
+                        const novaPos = [info.latitude, info.longitude];
+                        if (busMarkers[idBus]) {
+                            busMarkers[idBus].setLatLng(novaPos);
+                        } else {
+                            const cor = idBus === 'onibus_1' ? 'var(--pref-azul)' : 'var(--pref-verde)';
+                            const customIcon = L.divIcon({
+                                className: 'bus-marker-icon',
+                                html: `<div style="background-color: ${cor}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: white;">${idBus.slice(-1)}</div>`,
+                                iconSize: [14, 14]
+                            });
+                            busMarkers[idBus] = L.marker(novaPos, { icon: customIcon }).addTo(map).bindPopup(`<b>${info.nome || 'Ônibus'}</b>`);
+                        }
+                    }
+                    for (let idExistente in busMarkers) {
+                        if (!dadosFrotas[idExistente]) {
+                            map.removeLayer(busMarkers[idExistente]);
+                            delete busMarkers[idExistente];
+                        }
+                    }
+                    document.getElementById('msg-gps').innerText = "Localizando frotas...";
+                }
+            });
         }
 
-        // ESCUTA LOCALIZAÇÃO EM TEMPO REAL (Múltiplos Ônibus)
-        db.ref('localizacao_onibus').on('value', snap => {
-            if(snap.exists() && map) {
-                const dadosFrotas = snap.val();
-                
-                // Percorre todos os ônibus registrados no nó
-                for (let idBus in dadosFrotas) {
-                    const info = dadosFrotas[idBus];
-                    const novaPos = [info.latitude, info.longitude];
-                    
-                    if (busMarkers[idBus]) {
-                        // Se o marcador já existe, apenas move
-                        busMarkers[idBus].setLatLng(novaPos);
-                    } else {
-                        // Se é um novo ônibus, cria o ícone
-                        const cor = idBus === 'onibus_1' ? 'var(--pref-azul)' : 'var(--pref-verde)';
-                        const customIcon = L.divIcon({
-                            className: 'bus-marker-icon',
-                            html: `<div style="background-color: ${cor}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: white;">${idBus.slice(-1)}</div>`,
-                            iconSize: [14, 14]
-                        });
-                        
-                        busMarkers[idBus] = L.marker(novaPos, { icon: customIcon })
-                            .addTo(map)
-                            .bindPopup(`<b>${info.nome || 'Ônibus'}</b>`);
-                    }
-                }
-
-                // Remove do mapa ônibus que foram removidos do Firebase
-                for (let idExistente in busMarkers) {
-                    if (!dadosFrotas[idExistente]) {
-                        map.removeLayer(busMarkers[idExistente]);
-                        delete busMarkers[idExistente];
-                    }
-                }
-                
-                document.getElementById('msg-gps').innerText = "Frota em movimento (Sinal Ativo)";
-            }
-        });
-
-        // --- NOVAS FUNÇÕES DE INTERAÇÃO ---
         function trocarAba(aba) {
             document.getElementById('aba-mapa').classList.remove('active');
             document.getElementById('aba-lista').classList.remove('active');
             document.getElementById('btn-aba-mapa').classList.remove('active');
             document.getElementById('btn-aba-lista').classList.remove('active');
+            
             if(aba === 'mapa') {
                 document.getElementById('aba-mapa').classList.add('active');
                 document.getElementById('btn-aba-mapa').classList.add('active');
-                // Ajusta o mapa quando a aba abre
+                if(!map) inicializarMapa();
+                // ESSENCIAL: Força o Leaflet a recalcular o tamanho no Safari/iOS
                 setTimeout(() => { 
-                    if(!map) inicializarMapa();
-                    map.invalidateSize(); 
-                }, 200);
+                    if(map) {
+                        map.invalidateSize(true);
+                    }
+                }, 300);
             } else {
                 document.getElementById('aba-lista').classList.add('active');
                 document.getElementById('btn-aba-lista').classList.add('active');
@@ -520,21 +513,13 @@
             document.getElementById('lista-passageiros-aba').innerHTML = html || "Aguardando tickets...";
         }
 
-        // --- ESCUTAR MOTORISTAS ---
         db.ref('viagem_status/onibus_1').on('value', snap => {
             if(snap.exists()) document.getElementById('live-nassau').innerText = snap.val().mensagem;
         });
         db.ref('viagem_status/onibus_2').on('value', snap => {
             if(snap.exists()) document.getElementById('live-outras').innerText = snap.val().mensagem;
         });
-        db.ref('viagem_status/onibus_unico').on('value', snap => {
-            if(snap.exists()) {
-                document.getElementById('live-nassau').innerText = "Bus Único: " + snap.val().mensagem;
-                document.getElementById('live-outras').innerText = "-";
-            }
-        });
 
-        // --- TODAS AS SUAS FUNÇÕES ORIGINAIS DE 610 LINHAS ---
         function toggleTheme() { document.body.classList.toggle('light-mode'); }
 
         db.ref('configuracoes').on('value', snap => {
@@ -553,18 +538,6 @@
 
         function getDataHoje() { return new Date().toISOString().split('T')[0]; }
 
-        function validarCPF(cpf) {
-            cpf = cpf.replace(/[^\d]+/g,'');
-            if(cpf == '' || cpf.length != 11 || /^(\d)\1{10}$/.test(cpf)) return false;
-            let add = 0; for (let i=0; i < 9; i ++) add += parseInt(cpf.charAt(i)) * (10 - i);
-            let rev = 11 - (add % 11); if (rev == 10 || rev == 11) rev = 0;
-            if (rev != parseInt(cpf.charAt(9))) return false;
-            add = 0; for (let i = 0; i < 10; i ++) add += parseInt(cpf.charAt(i)) * (11 - i);
-            rev = 11 - (add % 11); if (rev == 10 || rev == 11) rev = 0;
-            if (rev != parseInt(cpf.charAt(10))) return false;
-            return true;
-        }
-
         auth.onAuthStateChanged(user => {
             if (user) {
                 db.ref('usuarios/' + user.uid).once('value').then(snap => {
@@ -582,12 +555,6 @@
             try { await auth.signInWithEmailAndPassword(email, senha); } catch (e) { alert("Erro nas credenciais."); }
         }
 
-        function esqueciSenha() {
-            const email = document.getElementById('l-email').value;
-            if(!email) return alert("Digite seu e-mail.");
-            auth.sendPasswordResetEmail(email).then(() => alert("E-mail enviado!")).catch(e => alert(e.message));
-        }
-
         async function criarConta() {
             const nome = document.getElementById('r-nome').value.trim();
             const apelido = document.getElementById('r-apelido').value.trim();
@@ -595,7 +562,6 @@
             const cpf = document.getElementById('r-cpf').value.replace(/[^\d]+/g,'');
             const senha = document.getElementById('r-senha').value;
             if(!nome || !apelido || !email || !cpf || !senha) return alert("Preencha tudo!");
-            if(!validarCPF(cpf)) return alert("CPF Inválido!");
             try {
                 const snapshot = await db.ref('usuarios').orderByChild('cpf').equalTo(cpf).once('value');
                 if(snapshot.exists()) return alert("CPF já cadastrado!");
@@ -613,12 +579,6 @@
         }
 
         async function salvarReserva() {
-            const agora = new Date();
-            const horaAtual = agora.getHours().toString().padStart(2, '0') + ":" + agora.getMinutes().toString().padStart(2, '0');
-            if(!configApp.h24) {
-                if(horaAtual < configApp.reservaInicia) return alert(`Abre às ${configApp.reservaInicia}.`);
-                if(horaAtual >= configApp.reservaTermina) return alert(`Encerrou às ${configApp.reservaTermina}.`);
-            }
             await db.ref('passageiros').push({
                 nome_completo: userLogado.nome,
                 apelido: userLogado.apelido || userLogado.nome.split(' ')[0], 
@@ -646,8 +606,8 @@
                 document.getElementById('area-reserva').style.display = 'none';
                 document.getElementById('status-reserva').style.display = 'block';
                 verificarLiberacaoAutomatica(listaHoje);
-                // Inicializa o mapa se o usuário já estiver na tela de status
-                setTimeout(() => { if(!map) inicializarMapa(); }, 500);
+                // Pré-inicializa o mapa no fundo
+                if(!map) inicializarMapa();
             }
         }
 
@@ -660,10 +620,10 @@
                     jaProcessouAuto = true;
                     await processarTicketsServidor(listaHoje, configApp.vagasOnibus || 45);
                 }
-                document.getElementById('timer-label').innerText = "TICKET LIBERADO!";
-                document.getElementById('countdown').innerText = "LIBERADO";
+                document.getElementById('bloco-timer').style.display = 'none';
                 document.getElementById('btn-rever').style.display = 'block';
                 document.getElementById('btn-lista-publica').style.display = 'block';
+                document.getElementById('container-central-ticket').style.borderColor = 'var(--pref-verde)';
             } else {
                 iniciarContagemRegressiva();
             }
@@ -672,23 +632,10 @@
         async function processarTicketsServidor(lista, vagas) {
             const updates = {};
             lista.sort((a, b) => a.timestamp - b.timestamp);
-            if(lista.length <= vagas) {
-                lista.forEach((p, i) => {
-                    updates[`/passageiros/${p.key}/numero_ticket`] = i + 1;
-                    updates[`/passageiros/${p.key}/onibus_designado`] = 1;
-                });
-            } else {
-                let cN = 1, cO = 1;
-                lista.forEach(p => {
-                    if(p.destino === 'UNINASSAU') {
-                        updates[`/passageiros/${p.key}/numero_ticket`] = cN++;
-                        updates[`/passageiros/${p.key}/onibus_designado`] = 1;
-                    } else {
-                        updates[`/passageiros/${p.key}/numero_ticket`] = cO++;
-                        updates[`/passageiros/${p.key}/onibus_designado`] = 2;
-                    }
-                });
-            }
+            lista.forEach((p, i) => {
+                updates[`/passageiros/${p.key}/numero_ticket`] = i + 1;
+                updates[`/passageiros/${p.key}/onibus_designado`] = p.destino === 'UNINASSAU' ? 1 : 2;
+            });
             return db.ref().update(updates);
         }
 
