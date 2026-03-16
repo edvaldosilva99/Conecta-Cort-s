@@ -230,9 +230,11 @@
             display:none; flex-direction:column; padding: 25px;
         }
         .scroll-lista { 
+            max-height: 250px; 
             overflow-y: auto; flex-grow: 1; margin: 15px 0; 
             padding-right: 8px;
         }
+        
         .scroll-lista::-webkit-scrollbar { width: 4px; }
         .scroll-lista::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.2); border-radius: 10px; }
         
@@ -361,10 +363,8 @@
                 <div id="aba-lista" class="area-conteudo-aba">
                     <div id="lista-passageiros-aba" class="scroll-lista" style="height: 100%;"></div>
                 </div>
-                
-                <button id="btn-lista-publica" onclick="abrirListaPublica()" style="display:none; background:none; border: 1px solid rgba(128,128,128,0.2); color: var(--text-color); padding: 18px; border-radius: 20px; width:100%; margin-top: 12px; cursor: pointer; font-weight: 700;">Lista Completa (PDF)</button>
-            </div>
-
+            </div> 
+            
             <div id="area-reserva">
                 <div style="background: rgba(0,168,89,0.1); padding: 15px; border-radius: 20px; border: 1px solid rgba(0,168,89,0.2); text-align: center; margin-bottom: 25px;">
                     <p style="font-size: 13px; font-weight: 600;" id="txt-msg-dia">Agendamento Diário</p>
@@ -406,14 +406,6 @@
             </div>
             <button class="btn-confirmar" onclick="document.getElementById('tela-ticket').style.display='none'" style="background:white; color:black; margin-top:30px;">Fechar Comprovante</button>
         </div>
-
-        <div id="tela-lista-publica">
-            <h2 style="text-align: center; font-size: 18px; font-weight: 800;">Passageiros Confirmados</h2>
-            <p id="data-lista" style="text-align: center; font-size: 10px; opacity: 0.5; margin-bottom: 10px;"></p>
-            <div class="scroll-lista" id="conteudo-lista-publica"></div>
-            <button class="btn-confirmar" onclick="document.getElementById('tela-lista-publica').style.display='none'" style="background:var(--pref-verde); margin-top:10px;">Voltar ao Início</button>
-        </div>
-
     </div>
 
     <script>
@@ -440,12 +432,9 @@
 
         function inicializarMapa() {
             if (map) return;
-            // Centro em Cortês
             map = L.map('map').setView([-8.4842, -35.5539], 15);
-            
-            // Tiles mais estáveis para visualização
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO'
+                attribution: '&copy; OpenStreetMap &copy; CARTO'
             }).addTo(map);
 
             db.ref('localizacao_onibus').on('value', snap => {
@@ -487,12 +476,7 @@
                 document.getElementById('aba-mapa').classList.add('active');
                 document.getElementById('btn-aba-mapa').classList.add('active');
                 if(!map) inicializarMapa();
-                // ESSENCIAL: Força o Leaflet a recalcular o tamanho no Safari/iOS
-                setTimeout(() => { 
-                    if(map) {
-                        map.invalidateSize(true);
-                    }
-                }, 300);
+                setTimeout(() => { if(map) map.invalidateSize(true); }, 300);
             } else {
                 document.getElementById('aba-lista').classList.add('active');
                 document.getElementById('btn-aba-lista').classList.add('active');
@@ -579,6 +563,13 @@
         }
 
         async function salvarReserva() {
+            const agora = new Date();
+            const horaAtual = agora.getHours().toString().padStart(2, '0') + ":" + agora.getMinutes().toString().padStart(2, '0');
+
+            if (horaAtual >= configApp.reservaTermina && !configApp.h24 && !configApp.instantaneo) {
+                return alert("O prazo para reserva de hoje já se encerrou às " + configApp.reservaTermina);
+            }
+
             await db.ref('passageiros').push({
                 nome_completo: userLogado.nome,
                 apelido: userLogado.apelido || userLogado.nome.split(' ')[0], 
@@ -606,7 +597,6 @@
                 document.getElementById('area-reserva').style.display = 'none';
                 document.getElementById('status-reserva').style.display = 'block';
                 verificarLiberacaoAutomatica(listaHoje);
-                // Pré-inicializa o mapa no fundo
                 if(!map) inicializarMapa();
             }
         }
@@ -622,7 +612,6 @@
                 }
                 document.getElementById('bloco-timer').style.display = 'none';
                 document.getElementById('btn-rever').style.display = 'block';
-                document.getElementById('btn-lista-publica').style.display = 'block';
                 document.getElementById('container-central-ticket').style.borderColor = 'var(--pref-verde)';
             } else {
                 iniciarContagemRegressiva();
@@ -632,10 +621,25 @@
         async function processarTicketsServidor(lista, vagas) {
             const updates = {};
             lista.sort((a, b) => a.timestamp - b.timestamp);
-            lista.forEach((p, i) => {
-                updates[`/passageiros/${p.key}/numero_ticket`] = i + 1;
-                updates[`/passageiros/${p.key}/onibus_designado`] = p.destino === 'UNINASSAU' ? 1 : 2;
-            });
+
+            if (lista.length <= 45) {
+                lista.forEach((p, i) => {
+                    updates[`/passageiros/${p.key}/numero_ticket`] = i + 1;
+                    updates[`/passageiros/${p.key}/onibus_designado`] = 1;
+                });
+            } else {
+                let contNassau = 1;
+                let contOutras = 1;
+                lista.forEach((p) => {
+                    if (p.destino === 'UNINASSAU') {
+                        updates[`/passageiros/${p.key}/numero_ticket`] = contNassau++;
+                        updates[`/passageiros/${p.key}/onibus_designado`] = 1;
+                    } else {
+                        updates[`/passageiros/${p.key}/numero_ticket`] = contOutras++;
+                        updates[`/passageiros/${p.key}/onibus_designado`] = 2;
+                    }
+                });
+            }
             return db.ref().update(updates);
         }
 
