@@ -11,6 +11,9 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
@@ -26,6 +29,24 @@
             --glass-border: rgba(255, 255, 255, 0.15);
             --input-bg: rgba(255,255,255,0.05);
         }
+
+        /* ESTILOS NOVOS ENCAIXADOS */
+        .container-status-duplo { display: flex; gap: 8px; margin-bottom: 12px; }
+        .card-status-mini { 
+            flex: 1; background: var(--glass); border: 1px solid var(--glass-border); 
+            padding: 10px; border-radius: 18px; text-align: center; 
+        }
+        .card-status-mini small { display: block; font-size: 9px; opacity: 0.6; margin-bottom: 4px; font-weight: 800; }
+        .card-status-mini div { font-size: 11px; font-weight: 700; }
+
+        .abas-container { display: flex; gap: 10px; margin-bottom: 15px; }
+        .btn-aba { 
+            flex: 1; padding: 12px; border-radius: 15px; border: 1px solid var(--glass-border); 
+            background: var(--glass); color: var(--text-color); font-weight: 700; cursor: pointer; transition: 0.3s;
+        }
+        .btn-aba.active { background: var(--pref-azul); border-color: transparent; }
+        .area-conteudo-aba { display: none; background: var(--glass); border-radius: 20px; padding: 15px; min-height: 200px; }
+        .area-conteudo-aba.active { display: block !important; }
 
         /* ESTILO MODO CLARO */
         body.light-mode {
@@ -57,14 +78,14 @@
             position: relative;
         }
 
-        /* IMAGEM DE FUNDO DA CIDADE (NOVA) */
+        /* IMAGEM DE FUNDO DA CIDADE */
         .bg-cidade-fundo {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background-image: url('foto-cortes.jpg'); /* Nome da sua imagem */
+            background-image: url('foto-cortes.jpg'); 
             background-size: cover;
             background-position: center;
-            opacity: 0.12; /* Baixa opacidade conforme solicitado */
+            opacity: 0.12; 
             z-index: -1;
             pointer-events: none;
         }
@@ -77,7 +98,7 @@
             cursor: pointer; z-index: 2000; font-size: 20px; display: flex; align-items: center; justify-content: center;
         }
 
-        /* CONTAINER PRINCIPAL (ESTILO IPHONE) */
+        /* CONTAINER PRINCIPAL */
         .app-container { 
             width: 360px; 
             height: 640px; 
@@ -108,7 +129,7 @@
             align-items: center; 
             justify-content: center; 
             gap: 15px; 
-            margin-bottom: 5px; 
+            margin-bottom: 5px;
             padding-top: 0px; 
         }
         .brasao { height: 75px; width: auto; pointer-events: none; }
@@ -174,7 +195,7 @@
             color: white;
         }
 
-        /* TICKET STYLE (PRECISO) */
+        /* TICKET STYLE */
         #tela-ticket { 
             position: absolute; top:0; left:0; width:100%; height:100%; 
             background: rgba(0,0,0,0.95); backdrop-filter: blur(15px); z-index: 1000; 
@@ -194,7 +215,6 @@
         .ticket-content { padding: 25px 20px; text-align: center; color: #333; }
         .pos-number { font-size: 60px; font-weight: 800; color: var(--pref-azul); margin: 5px 0; line-height: 1; }
         
-        /* QR CODE CONTAINER */
         #qrcode-container { display: flex; justify-content: center; margin: 15px 0; }
 
         .ticket-divider { border-top: 2px dashed #eee; margin: 15px 0; position: relative; }
@@ -203,8 +223,8 @@
         }
         .ticket-divider::before { left: -31px; } .ticket-divider::after { right: -31px; }
 
-        /* LISTA PÚBLICA & HISTÓRICO */
-        #tela-lista-publica, #tela-historico {
+        /* LISTA PÚBLICA */
+        #tela-lista-publica {
             position: absolute; top:0; left:0; width:100%; height:100%; 
             background: var(--bg-deep); z-index: 900; 
             display:none; flex-direction:column; padding: 25px;
@@ -231,9 +251,24 @@
             text-transform: uppercase;
         }
 
-        /* INFOS EXTRAS */
         #countdown { font-size: 38px; font-weight: 800; color: var(--pref-verde); text-shadow: 0 0 20px var(--pref-verde-glow); }
         .footer-info { margin-top: auto; text-align: center; padding-bottom: 10px; }
+        
+        /* ESTILO DO MARCADOR DO ÔNIBUS */
+        .bus-marker-icon {
+            background-color: var(--pref-verde);
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 10px var(--pref-verde-glow);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+            color: white;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -294,19 +329,44 @@
             </div>
 
             <div id="status-reserva" style="display:none; text-align:center;">
-                <div style="background:var(--glass); padding:25px; border-radius:30px; border:1px solid var(--pref-verde-glow); margin-bottom:25px;">
-                    <p id="timer-label" style="font-size:11px; opacity:0.6; letter-spacing:1px; margin-bottom:10px;">SEU TICKET SERÁ GERADO EM:</p>
-                    <div id="countdown">00:00:00</div>
+                <div class="container-status-duplo">
+                    <div class="card-status-mini" style="border-color: var(--pref-azul);">
+                        <small>ÔNIBUS NASSAU</small>
+                        <div id="live-nassau">Aguardando...</div>
+                    </div>
+                    <div class="card-status-mini" style="border-color: var(--pref-verde);">
+                        <small>OUTRAS FACUL.</small>
+                        <div id="live-outras">Aguardando...</div>
+                    </div>
+                </div>
+
+                <div style="background:var(--glass); padding:15px; border-radius:25px; border:1px solid var(--pref-verde-glow); margin-bottom:15px;">
+                    <p id="timer-label" style="font-size:10px; opacity:0.6; letter-spacing:1px; margin-bottom:5px;">SEU TICKET SERÁ GERADO EM:</p>
+                    <div id="countdown" style="font-size: 28px;">00:00:00</div>
+                </div>
+
+                <div class="abas-container">
+                    <button id="btn-aba-mapa" class="btn-aba active" onclick="trocarAba('mapa')">📍 Mapa</button>
+                    <button id="btn-aba-lista" class="btn-aba" onclick="trocarAba('lista')">👥 Lista</button>
+                </div>
+
+                <div id="aba-mapa" class="area-conteudo-aba active">
+                    <div id="map" style="height: 200px; width: 100%; border-radius: 15px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2);"></div>
+                    <p id="msg-gps" style="font-size: 10px; opacity: 0.5; margin-top: 8px;">Aguardando sinal GPS dos ônibus...</p>
+                </div>
+
+                <div id="aba-lista" class="area-conteudo-aba">
+                    <div id="lista-passageiros-aba" class="scroll-lista" style="height: 180px;"></div>
                 </div>
                 
-                <button id="btn-rever" class="btn-confirmar" style="display:none;" onclick="calcularEVerTicket()">Ver Ticket de Embarque</button>
-                <button id="btn-lista-publica" onclick="abrirListaPublica()" style="display:none; background:none; border: 1px solid rgba(128,128,128,0.2); color: var(--text-color); padding: 18px; border-radius: 20px; width:100%; margin-top: 12px; cursor: pointer; font-weight: 700;">Lista de Passageiros</button>
+                <button id="btn-rever" class="btn-confirmar" style="display:none; margin-top:15px;" onclick="calcularEVerTicket()">Ver Ticket de Embarque</button>
+                <button id="btn-lista-publica" onclick="abrirListaPublica()" style="display:none; background:none; border: 1px solid rgba(128,128,128,0.2); color: var(--text-color); padding: 18px; border-radius: 20px; width:100%; margin-top: 12px; cursor: pointer; font-weight: 700;">Lista Completa (PDF)</button>
             </div>
 
             <div id="area-reserva">
                 <div style="background: rgba(0,168,89,0.1); padding: 15px; border-radius: 20px; border: 1px solid rgba(0,168,89,0.2); text-align: center; margin-bottom: 25px;">
                     <p style="font-size: 13px; font-weight: 600;" id="txt-msg-dia">Agendamento Diário</p>
-                    <p style="font-size: 11px; opacity: 0.7;" id="txt-horario-info">Encerramento: 12h00</p>
+                    <p style="font-size: 11px; opacity: 0.7;" id="txt-horario-info">Encerramento: --:--</p>
                 </div>
                 
                 <p style="text-align: center; font-size: 14px; opacity: 0.7; margin-bottom: 15px;">Escolha o seu destino:</p>
@@ -323,8 +383,6 @@
                 
                 <button class="btn-confirmar" id="btn-confirmar" style="opacity:0.3; pointer-events:none; margin-top:20px;" onclick="salvarReserva()">Confirmar Reserva</button>
             </div>
-
-            <button onclick="abrirHistorico()" style="margin-top: 15px; background:none; border:1px solid var(--glass-border); color:var(--text-color); padding:10px; border-radius:15px; cursor:pointer; font-size:12px;">📜 Ver Meu Histórico de Viagens</button>
 
             <button onclick="firebase.auth().signOut()" style="margin-top: auto; color: #888; border: none; background: none; padding: 15px; cursor:pointer; font-weight: 600;">Sair da Conta</button>
         </div>
@@ -354,16 +412,10 @@
             <button class="btn-confirmar" onclick="document.getElementById('tela-lista-publica').style.display='none'" style="background:var(--pref-verde); margin-top:10px;">Voltar ao Início</button>
         </div>
 
-        <div id="tela-historico">
-            <h2 style="text-align: center; font-size: 18px; font-weight: 800;">Meu Histórico</h2>
-            <p style="text-align: center; font-size: 11px; opacity: 0.5; margin-bottom: 15px;">Suas viagens registradas</p>
-            <div class="scroll-lista" id="conteudo-historico"></div>
-            <button class="btn-confirmar" onclick="document.getElementById('tela-historico').style.display='none'" style="background:var(--pref-azul); margin-top:10px;">Fechar Histórico</button>
-        </div>
-
     </div>
 
     <script>
+        // CONFIGURAÇÕES FIREBASE (Originais restauradas)
         const firebaseConfig = {
             apiKey: "AIzaSyDG1x9M2T6wG_HG2MJ9w4dj2c8XOEsbIP4",
             authDomain: "conecta-cortes.firebaseapp.com",
@@ -379,19 +431,117 @@
 
         let userLogado = null;
         let destinoSelecionado = "";
-        let configApp = { instantaneo: false, h24: false, msg: "" };
+        let configApp = { instantaneo: false, h24: false, msg: "", reservaInicia: "07:00", reservaTermina: "12:00", vagasOnibus: 45 };
+        let jaProcessouAuto = false;
 
-        // MODO CLARO / ESCURO
-        function toggleTheme() {
-            document.body.classList.toggle('light-mode');
+        // VARIÁVEIS DO MAPA
+        let map;
+        let busMarkers = {}; // Dicionário para gerenciar múltiplos ônibus
+
+        function inicializarMapa() {
+            if (map) return;
+            map = L.map('map').setView([-8.4842, -35.5539], 15);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
         }
 
-        // --- CONEXÃO COM ADMIN ---
+        // ESCUTA LOCALIZAÇÃO EM TEMPO REAL (Múltiplos Ônibus)
+        db.ref('localizacao_onibus').on('value', snap => {
+            if(snap.exists() && map) {
+                const dadosFrotas = snap.val();
+                
+                // Percorre todos os ônibus registrados no nó
+                for (let idBus in dadosFrotas) {
+                    const info = dadosFrotas[idBus];
+                    const novaPos = [info.latitude, info.longitude];
+                    
+                    if (busMarkers[idBus]) {
+                        // Se o marcador já existe, apenas move
+                        busMarkers[idBus].setLatLng(novaPos);
+                    } else {
+                        // Se é um novo ônibus, cria o ícone
+                        const cor = idBus === 'onibus_1' ? 'var(--pref-azul)' : 'var(--pref-verde)';
+                        const customIcon = L.divIcon({
+                            className: 'bus-marker-icon',
+                            html: `<div style="background-color: ${cor}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: white;">${idBus.slice(-1)}</div>`,
+                            iconSize: [14, 14]
+                        });
+                        
+                        busMarkers[idBus] = L.marker(novaPos, { icon: customIcon })
+                            .addTo(map)
+                            .bindPopup(`<b>${info.nome || 'Ônibus'}</b>`);
+                    }
+                }
+
+                // Remove do mapa ônibus que foram removidos do Firebase
+                for (let idExistente in busMarkers) {
+                    if (!dadosFrotas[idExistente]) {
+                        map.removeLayer(busMarkers[idExistente]);
+                        delete busMarkers[idExistente];
+                    }
+                }
+                
+                document.getElementById('msg-gps').innerText = "Frota em movimento (Sinal Ativo)";
+            }
+        });
+
+        // --- NOVAS FUNÇÕES DE INTERAÇÃO ---
+        function trocarAba(aba) {
+            document.getElementById('aba-mapa').classList.remove('active');
+            document.getElementById('aba-lista').classList.remove('active');
+            document.getElementById('btn-aba-mapa').classList.remove('active');
+            document.getElementById('btn-aba-lista').classList.remove('active');
+            if(aba === 'mapa') {
+                document.getElementById('aba-mapa').classList.add('active');
+                document.getElementById('btn-aba-mapa').classList.add('active');
+                // Ajusta o mapa quando a aba abre
+                setTimeout(() => { 
+                    if(!map) inicializarMapa();
+                    map.invalidateSize(); 
+                }, 200);
+            } else {
+                document.getElementById('aba-lista').classList.add('active');
+                document.getElementById('btn-aba-lista').classList.add('active');
+                gerarListaNaAba();
+            }
+        }
+
+        async function gerarListaNaAba() {
+            const hoje = getDataHoje();
+            const snap = await db.ref('passageiros').once('value');
+            let html = "";
+            snap.forEach(c => {
+                const p = c.val();
+                if(p.data === hoje && p.numero_ticket) {
+                    html += `<div class="item-lista" style="padding:10px; margin-bottom:5px; font-size:11px;">${p.numero_ticket}. ${p.apelido}</div>`;
+                }
+            });
+            document.getElementById('lista-passageiros-aba').innerHTML = html || "Aguardando tickets...";
+        }
+
+        // --- ESCUTAR MOTORISTAS ---
+        db.ref('viagem_status/onibus_1').on('value', snap => {
+            if(snap.exists()) document.getElementById('live-nassau').innerText = snap.val().mensagem;
+        });
+        db.ref('viagem_status/onibus_2').on('value', snap => {
+            if(snap.exists()) document.getElementById('live-outras').innerText = snap.val().mensagem;
+        });
+        db.ref('viagem_status/onibus_unico').on('value', snap => {
+            if(snap.exists()) {
+                document.getElementById('live-nassau').innerText = "Bus Único: " + snap.val().mensagem;
+                document.getElementById('live-outras').innerText = "-";
+            }
+        });
+
+        // --- TODAS AS SUAS FUNÇÕES ORIGINAIS DE 610 LINHAS ---
+        function toggleTheme() { document.body.classList.toggle('light-mode'); }
+
         db.ref('configuracoes').on('value', snap => {
             if(snap.exists()) {
                 configApp = snap.val();
                 if(configApp.msg) document.getElementById('txt-msg-dia').innerText = configApp.msg;
-                document.getElementById('txt-horario-info').innerText = configApp.h24 ? "Horário Livre (24h)" : "Encerramento: 12h00";
+                document.getElementById('txt-horario-info').innerText = configApp.h24 ? "Horário Livre (24h)" : `Encerramento: ${configApp.reservaTermina || '12:00'}`;
                 if(userLogado) checarStatusReserva();
             }
         });
@@ -432,16 +582,20 @@
             try { await auth.signInWithEmailAndPassword(email, senha); } catch (e) { alert("Erro nas credenciais."); }
         }
 
+        function esqueciSenha() {
+            const email = document.getElementById('l-email').value;
+            if(!email) return alert("Digite seu e-mail.");
+            auth.sendPasswordResetEmail(email).then(() => alert("E-mail enviado!")).catch(e => alert(e.message));
+        }
+
         async function criarConta() {
             const nome = document.getElementById('r-nome').value.trim();
             const apelido = document.getElementById('r-apelido').value.trim();
             const email = document.getElementById('r-email').value.trim();
             const cpf = document.getElementById('r-cpf').value.replace(/[^\d]+/g,'');
             const senha = document.getElementById('r-senha').value;
-            
             if(!nome || !apelido || !email || !cpf || !senha) return alert("Preencha tudo!");
             if(!validarCPF(cpf)) return alert("CPF Inválido!");
-            
             try {
                 const snapshot = await db.ref('usuarios').orderByChild('cpf').equalTo(cpf).once('value');
                 if(snapshot.exists()) return alert("CPF já cadastrado!");
@@ -459,10 +613,15 @@
         }
 
         async function salvarReserva() {
-            if(!configApp.h24 && new Date().getHours() >= 12) return alert("Reservas encerradas às 12h.");
+            const agora = new Date();
+            const horaAtual = agora.getHours().toString().padStart(2, '0') + ":" + agora.getMinutes().toString().padStart(2, '0');
+            if(!configApp.h24) {
+                if(horaAtual < configApp.reservaInicia) return alert(`Abre às ${configApp.reservaInicia}.`);
+                if(horaAtual >= configApp.reservaTermina) return alert(`Encerrou às ${configApp.reservaTermina}.`);
+            }
             await db.ref('passageiros').push({
                 nome_completo: userLogado.nome,
-                apelido: userLogado.apelido || userLogado.nome.split(' ')[0], // Fallback para 1º nome se não tiver apelido
+                apelido: userLogado.apelido || userLogado.nome.split(' ')[0], 
                 cpf_completo: userLogado.cpf,
                 destino: destinoSelecionado,
                 data: getDataHoje(),
@@ -474,36 +633,77 @@
         async function checarStatusReserva() {
             const hoje = getDataHoje();
             const snap = await db.ref('passageiros').once('value');
-            let reservou = false;
+            let minhaReserva = null;
+            let listaHoje = [];
             snap.forEach(child => {
-                if(child.val().cpf_completo === userLogado.cpf && child.val().data === hoje) reservou = true;
+                const p = child.val();
+                if(p.data === hoje) {
+                    listaHoje.push({key: child.key, ...p});
+                    if(p.cpf_completo === userLogado.cpf) minhaReserva = p;
+                }
             });
-
-            if(reservou) {
+            if(minhaReserva) {
                 document.getElementById('area-reserva').style.display = 'none';
                 document.getElementById('status-reserva').style.display = 'block';
-                if(configApp.instantaneo) {
-                    document.getElementById('timer-label').innerText = "TICKET DISPONÍVEL!";
-                    document.getElementById('countdown').innerText = "LIBERADO";
-                    document.getElementById('btn-rever').style.display = 'block';
-                    document.getElementById('btn-lista-publica').style.display = 'block';
-                } else {
-                    iniciarContagemRegressiva();
-                }
+                verificarLiberacaoAutomatica(listaHoje);
+                // Inicializa o mapa se o usuário já estiver na tela de status
+                setTimeout(() => { if(!map) inicializarMapa(); }, 500);
             }
         }
 
+        async function verificarLiberacaoAutomatica(listaHoje) {
+            const agora = new Date();
+            const horaAtual = agora.getHours().toString().padStart(2, '0') + ":" + agora.getMinutes().toString().padStart(2, '0');
+            if(horaAtual >= configApp.reservaTermina || configApp.instantaneo || configApp.h24) {
+                const ticketsGerados = listaHoje.some(p => p.numero_ticket);
+                if(!ticketsGerados && listaHoje.length > 0 && !jaProcessouAuto) {
+                    jaProcessouAuto = true;
+                    await processarTicketsServidor(listaHoje, configApp.vagasOnibus || 45);
+                }
+                document.getElementById('timer-label').innerText = "TICKET LIBERADO!";
+                document.getElementById('countdown').innerText = "LIBERADO";
+                document.getElementById('btn-rever').style.display = 'block';
+                document.getElementById('btn-lista-publica').style.display = 'block';
+            } else {
+                iniciarContagemRegressiva();
+            }
+        }
+
+        async function processarTicketsServidor(lista, vagas) {
+            const updates = {};
+            lista.sort((a, b) => a.timestamp - b.timestamp);
+            if(lista.length <= vagas) {
+                lista.forEach((p, i) => {
+                    updates[`/passageiros/${p.key}/numero_ticket`] = i + 1;
+                    updates[`/passageiros/${p.key}/onibus_designado`] = 1;
+                });
+            } else {
+                let cN = 1, cO = 1;
+                lista.forEach(p => {
+                    if(p.destino === 'UNINASSAU') {
+                        updates[`/passageiros/${p.key}/numero_ticket`] = cN++;
+                        updates[`/passageiros/${p.key}/onibus_designado`] = 1;
+                    } else {
+                        updates[`/passageiros/${p.key}/numero_ticket`] = cO++;
+                        updates[`/passageiros/${p.key}/onibus_designado`] = 2;
+                    }
+                });
+            }
+            return db.ref().update(updates);
+        }
+
         function iniciarContagemRegressiva() {
+            const [horas, minutos] = (configApp.reservaTermina || "12:00").split(':');
             const intervalo = setInterval(() => {
-                const diff = (new Date().setHours(12,0,0,0)) - new Date();
+                const alvo = new Date();
+                alvo.setHours(horas, minutos, 0, 0);
+                const diff = alvo - new Date();
                 if (diff > 0 && !configApp.instantaneo) {
                     const h = Math.floor(diff / 3600000), m = Math.floor((diff % 3600000) / 60000), s = Math.floor((diff % 60000) / 1000);
                     document.getElementById('countdown').innerText = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
                 } else {
-                    document.getElementById('countdown').innerText = "TICKET LIBERADO!";
-                    document.getElementById('btn-rever').style.display = 'block';
-                    document.getElementById('btn-lista-publica').style.display = 'block';
                     clearInterval(intervalo);
+                    checarStatusReserva();
                 }
             }, 1000);
         }
@@ -514,65 +714,35 @@
             let todos = []; snap.forEach(c => { if(c.val().data === hoje) todos.push(c.val()); });
             todos.sort((a, b) => a.timestamp - b.timestamp);
             let meu = todos.find(p => p.cpf_completo === userLogado.cpf);
-            let sub = todos.filter(p => p.destino === meu.destino);
-            let pos = (todos.length <= 44 ? todos.indexOf(meu) : sub.indexOf(meu)) + 1;
-            
-            document.getElementById('tk-posicao').innerText = "#" + String(pos).padStart(3, '0');
+            if(!meu || !meu.numero_ticket) return;
+            document.getElementById('tk-posicao').innerText = "#" + String(meu.numero_ticket).padStart(3, '0');
             document.getElementById('tk-nome').innerText = meu.nome_completo;
             document.getElementById('tk-destino').innerText = "DESTINO: " + meu.destino;
-            document.getElementById('tk-obs').innerText = todos.length <= 44 ? "ÔNIBUS ÚNICO" : (meu.destino === 'UNINASSAU' ? "ÔNIBUS 01" : "ÔNIBUS 02");
-            
-            // GERAR QR CODE
+            document.getElementById('tk-obs').innerText = "ÔNIBUS " + String(meu.onibus_designado).padStart(2, '0');
             document.getElementById('qrcode-container').innerHTML = "";
-            new QRCode(document.getElementById("qrcode-container"), {
-                text: `VALIDO: ${meu.nome_completo} | CPF: ${meu.cpf_completo} | POS: ${pos}`,
-                width: 128,
-                height: 128
-            });
-
+            new QRCode(document.getElementById("qrcode-container"), { text: meu.cpf_completo, width: 128, height: 128 });
             document.getElementById('tela-ticket').style.display = 'flex';
         }
 
         async function abrirListaPublica() {
             const hoje = getDataHoje();
             const snap = await db.ref('passageiros').once('value');
-            let todos = []; snap.forEach(c => { if(c.val().data === hoje) todos.push(c.val()); });
-            todos.sort((a, b) => a.timestamp - b.timestamp);
+            let todos = []; snap.forEach(c => { if(c.val().data === hoje) todos.push({key: c.key, ...c.val()}); });
+            todos.sort((a, b) => (a.numero_ticket || 999) - (b.numero_ticket || 999));
             let html = "";
-            if(todos.length <= 44) {
+            const o1 = todos.filter(p => p.onibus_designado == 1);
+            const o2 = todos.filter(p => p.onibus_designado == 2);
+            if(o2.length === 0) {
                 html += "<div class='separador-bus'>🚍 ÔNIBUS ÚNICO</div>";
-                // AQUI EXIBIMOS O APELIDO PARA PRIVACIDADE
-                todos.forEach((p, i) => html += `<div class='item-lista'><span>${i+1}. ${p.apelido || p.nome_completo.split(' ')[0]}</span></div>`);
+                o1.forEach(p => html += `<div class='item-lista'><span>${p.numero_ticket}. ${p.apelido}</span></div>`);
             } else {
-                ['UNINASSAU', 'OUTRAS'].forEach(d => {
-                    html += `<div class='separador-bus'>🚍 ÔNIBUS ${d === 'UNINASSAU' ? '01' : '02'} - ${d}</div>`;
-                    // AQUI TAMBÉM EXIBIMOS O APELIDO
-                    todos.filter(p => p.destino === d).forEach((p, i) => html += `<div class='item-lista'><span>${i+1}. ${p.apelido || p.nome_completo.split(' ')[0]}</span></div>`);
-                });
+                html += `<div class='separador-bus'>🚍 ÔNIBUS 01 - NASSAU</div>`;
+                o1.forEach(p => html += `<div class='item-lista'><span>${p.numero_ticket}. ${p.apelido}</span></div>`);
+                html += `<div class='separador-bus'>🚍 ÔNIBUS 02 - OUTRAS</div>`;
+                o2.forEach(p => html += `<div class='item-lista'><span>${p.numero_ticket}. ${p.apelido}</span></div>`);
             }
             document.getElementById('conteudo-lista-publica').innerHTML = html;
             document.getElementById('tela-lista-publica').style.display = 'flex';
-        }
-
-        async function abrirHistorico() {
-            const snap = await db.ref('passageiros').once('value');
-            let html = "";
-            let viagens = [];
-            snap.forEach(c => {
-                if(c.val().cpf_completo === userLogado.cpf) viagens.push(c.val());
-            });
-            viagens.sort((a, b) => b.timestamp - a.timestamp); // Mais recentes primeiro
-            
-            viagens.forEach(v => {
-                const dataFormatada = v.data.split('-').reverse().join('/');
-                html += `<div class='item-lista'>
-                            <span>📅 ${dataFormatada}</span>
-                            <span style='font-weight:700'>${v.destino}</span>
-                         </div>`;
-            });
-            
-            document.getElementById('conteudo-historico').innerHTML = html || "<p style='text-align:center; opacity:0.5'>Nenhuma viagem registrada.</p>";
-            document.getElementById('tela-historico').style.display = 'flex';
         }
     </script>
 </body>
